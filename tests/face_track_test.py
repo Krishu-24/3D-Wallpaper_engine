@@ -82,7 +82,10 @@ while True:
 
     # Read frame from webcam
     ret, cam_f = cap.read()
+    fh, fw = cam_f.shape[:2]
 
+    print("Frame width:", fw)
+    print("Frame height:", fh)
     # If camera frame was not captured correctly, stop the loop
     if not ret:
         print("Failed to read from webcam")
@@ -102,8 +105,8 @@ while True:
         face_center_x = x + (w // 2)
 
         # Map face center x-coordinate to image sequence index.
-        # Current usable camera x range is assumed to be 0 to 500.
-        image_index = int((face_center_x / 500) * (num_images - 1))
+        # Current usable camera x range is 0 to fw.
+        image_index = int((face_center_x / fw) * (num_images - 1))
 
         # Clamp index so it always stays between 0 and num_images - 1
         image_index = max(0, min(num_images - 1, image_index))

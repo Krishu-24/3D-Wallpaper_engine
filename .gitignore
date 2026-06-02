@@ -2,3 +2,4 @@
 assets/cube/**/test_cube_imageseq*/
 assets/cube/**/*.png
 assets/screen_as_window/renders
+.env
