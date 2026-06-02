@@ -473,22 +473,22 @@ Current issue:
 Recommended next test:
 
     Y_VIEWS = 121
-    Z_VIEWS = 9
+    Z_VIEWS = 35
 
 Total images:
 
-    121 x 9 = 1089 images
+    121 x 35 = 4235 images
 
 This keeps the vertical count low while improving the more important horizontal direction.
 
 A later higher-quality test:
 
     Y_VIEWS = 181
-    Z_VIEWS = 11
+    Z_VIEWS = 40
 
 Total images:
 
-    181 x 11 = 1991 images
+    181 x 11 = 7240 images
 
 This would be smoother, but it also increases render time, storage, and possible RAM usage.
 
@@ -960,11 +960,3 @@ Immediate next steps:
     6. Then test a higher Y view render
 
 This should address the current issues without making the system unnecessarily complex too early.
-
-## Possible Commit Message
-
-    git commit -m "Document playback optimization research and prototype issues"
-
-Alternative:
-
-    git commit -m "Add research notes for image caching and smooth view playback"
