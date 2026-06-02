@@ -1,1 +1,4 @@
 *.blend1
+assets/cube/**/test_cube_imageseq*/
+assets/cube/**/*.png
+
