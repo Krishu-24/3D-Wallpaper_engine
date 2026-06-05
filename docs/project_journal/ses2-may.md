@@ -1,4 +1,4 @@
-# Session 2 – April 1, 2026
+# Session 2 – may, 2026
 
 ## Objective
 

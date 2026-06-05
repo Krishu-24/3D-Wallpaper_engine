@@ -35,9 +35,9 @@ def build_config():
         sequence=SequenceConfig(
             folder=Path(sequence_folder),
 
-            # Current old rendered sequence
-            y_views=60,
-            z_views=9,
+            # New high-density rendered sequence
+            y_views=121,
+            z_views=35,
 
             # Use this if files are view_0001.png, view_0002.png...
             filename_pattern="view_{frame:04d}.png",
@@ -46,27 +46,20 @@ def build_config():
             start_frame=1,
         ),
         cache=CacheConfig(
-            max_cache_size=120,
-            preload_radius_y=3,
-            preload_radius_z=1,
+            max_cache_size=300,
+            preload_radius_y=4,
+            preload_radius_z=2,
             max_workers=4,
-
-            # Keep this off for the low-count old sequence.
             enable_blending=False,
-
             resize_to=None,
         ),
         tracking=TrackingConfig(
             camera_index=0,
-
             smoothing_amount=0.40,
             snap_distance=8.0,
-
             mirror_camera=True,
-
             flip_x=False,
             flip_z=True,
-
             min_face_size=(60, 60),
             scale_factor=1.2,
             min_neighbors=5,

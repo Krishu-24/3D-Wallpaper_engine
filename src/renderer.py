@@ -43,6 +43,11 @@ class WallpaperRenderer:
         self.smoother = ExponentialSmoother2D(
             amount=self.config.tracking.smoothing_amount,
             snap_distance=self.config.tracking.snap_distance,
+
+            # X has many views, so it can stay responsive.
+            # Z/vertical has fewer views, so smooth it a bit more.
+            amount_x=0.60,
+            amount_y=0.45,
         )
 
         self.camera_worker = CameraWorker(
@@ -61,11 +66,19 @@ class WallpaperRenderer:
             max_tracking_fps=self.config.threading.max_tracking_fps,
         )
 
+        # Start from center view
         self.last_display_y = (self.config.sequence.y_views - 1) / 2
         self.last_display_z = (self.config.sequence.z_views - 1) / 2
 
         self.raw_y = None
         self.raw_z = None
+
+        # Used to reject false face detections.
+        # Without this, Haar Cascade can detect a wrong face-like region and
+        # the render appears to "not hold" when tracking is lost.
+        self.last_valid_face_box = None
+        self.max_face_jump_px = 180
+        self.max_face_size_change_ratio = 0.55
 
     def setup_windows(self):
         cv2.namedWindow(self.config.window.window_name, cv2.WINDOW_NORMAL)
@@ -85,6 +98,51 @@ class WallpaperRenderer:
         self.camera_worker.start()
         self.tracking_worker.start()
 
+    def is_reasonable_face_box(self, face_box):
+        """
+        Rejects sudden false detections.
+
+        The renderer should only update the view if the detected face box is
+        close enough to the previous valid face box.
+
+        If detection is lost or becomes unreasonable, the renderer holds the
+        last valid render position.
+        """
+
+        if face_box is None:
+            return False
+
+        if self.last_valid_face_box is None:
+            return True
+
+        x, y, w, h = face_box
+        lx, ly, lw, lh = self.last_valid_face_box
+
+        cx = x + w / 2
+        cy = y + h / 2
+
+        lcx = lx + lw / 2
+        lcy = ly + lh / 2
+
+        jump_x = abs(cx - lcx)
+        jump_y = abs(cy - lcy)
+
+        if jump_x > self.max_face_jump_px or jump_y > self.max_face_jump_px:
+            return False
+
+        old_area = lw * lh
+        new_area = w * h
+
+        if old_area <= 0:
+            return True
+
+        size_change = abs(new_area - old_area) / old_area
+
+        if size_change > self.max_face_size_change_ratio:
+            return False
+
+        return True
+
     def run(self):
         self.setup_windows()
         self.start_workers()
@@ -97,18 +155,32 @@ class WallpaperRenderer:
 
         try:
             while True:
-                camera_frame, _, camera_frame_id = self.shared_state.get_camera_frame(copy=True)
+                camera_frame, _, camera_frame_id = self.shared_state.get_camera_frame(
+                    copy=True
+                )
 
                 if camera_frame is None:
                     time.sleep(0.005)
+
                     key = cv2.waitKey(1) & 0xFF
                     if key == 27:
                         break
+
                     continue
 
                 camera_height, camera_width = camera_frame.shape[:2]
 
                 face_box, _, tracking_frame_id = self.shared_state.get_face_box()
+
+                # Reject false detections.
+                # If face_box is None or unreasonable, hold the last rendered view.
+                if not self.is_reasonable_face_box(face_box):
+                    face_box = None
+                else:
+                    self.last_valid_face_box = face_box
+
+                smoothed_y = self.last_display_y
+                smoothed_z = self.last_display_z
 
                 if face_box is not None:
                     self.raw_y, self.raw_z = face_box_to_sequence_indices(
@@ -130,8 +202,11 @@ class WallpaperRenderer:
                     self.last_display_z = smoothed_z
 
                 else:
-                    # Tracking lost:
+                    # Tracking lost or rejected:
                     # keep last_display_y and last_display_z unchanged.
+                    # Do not reset smoother.
+                    # Do not jump to center.
+                    # Do not use stale false detections.
                     smoothed_y = self.last_display_y
                     smoothed_z = self.last_display_z
 

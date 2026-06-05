@@ -5,19 +5,19 @@ from pathlib import Path
 @dataclass
 class SequenceConfig:
     folder: Path
-    y_views: int = 60
-    z_views: int = 9
+    y_views: int = 121
+    z_views: int = 35
     filename_pattern: str = "view_{frame:04d}.png"
     start_frame: int = 1
 
-
+@dataclass
 @dataclass
 class CacheConfig:
-    max_cache_size: int = 120
-    preload_radius_y: int = 3
-    preload_radius_z: int = 1
-    max_workers: int = 4
-    enable_blending: bool = False
+    max_cache_size: int = 180
+    preload_radius_y: int = 8
+    preload_radius_z: int = 2
+    max_workers: int = 6
+    enable_blending: bool = True
     resize_to: tuple[int, int] | None = None
 
 
@@ -25,8 +25,8 @@ class CacheConfig:
 class TrackingConfig:
     camera_index: int = 0
 
-    smoothing_amount: float = 0.40
-    snap_distance: float = 8.0
+    smoothing_amount: float = 0.55
+    snap_distance: float = 6.0
 
     mirror_camera: bool = True
 
@@ -39,10 +39,11 @@ class TrackingConfig:
 
 
 @dataclass
+@dataclass
 class ThreadingConfig:
     camera_poll_sleep: float = 0.001
     tracking_poll_sleep: float = 0.005
-    max_tracking_fps: float = 60.0
+    max_tracking_fps: float = 30.0
 
 
 @dataclass

@@ -3,19 +3,24 @@ import math
 
 class ExponentialSmoother2D:
     """
-    Exponential smoothing with snap threshold.
+    Exponential smoothing with snap threshold and separate axis smoothing.
 
-    Small movement:
-    - smooths normally
-
-    Large movement:
-    - snaps to the new position so the render does not slowly travel
-      through every intermediate frame.
+    Horizontal can stay faster because there are more horizontal views.
+    Vertical can be smoothed differently because there are fewer vertical views.
     """
 
-    def __init__(self, amount=0.45, snap_distance=10.0):
+    def __init__(
+        self,
+        amount=0.55,
+        snap_distance=6.0,
+        amount_x=None,
+        amount_y=None,
+    ):
         self.amount = amount
+        self.amount_x = amount if amount_x is None else amount_x
+        self.amount_y = amount if amount_y is None else amount_y
         self.snap_distance = snap_distance
+
         self.x = None
         self.y = None
 
@@ -31,6 +36,7 @@ class ExponentialSmoother2D:
 
         dx = new_x - self.x
         dy = new_y - self.y
+
         distance = math.sqrt(dx * dx + dy * dy)
 
         if distance >= self.snap_distance:
@@ -38,8 +44,8 @@ class ExponentialSmoother2D:
             self.y = new_y
             return self.x, self.y
 
-        self.x = self.x + self.amount * dx
-        self.y = self.y + self.amount * dy
+        self.x = self.x + self.amount_x * dx
+        self.y = self.y + self.amount_y * dy
 
         return self.x, self.y
 
