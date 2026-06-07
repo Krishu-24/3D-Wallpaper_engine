@@ -1,7 +1,7 @@
 import threading
 import time
 
-from face_tracker import FaceTracker
+from .face_tracker import FaceTracker
 
 
 class TrackingWorker:

@@ -1,13 +1,13 @@
 import cv2
 import time
 
-from camera_worker import CameraWorker
-from debug_view import create_debug_view
-from indexing import face_box_to_sequence_indices
-from sequence_cache import ImageSequenceCache
-from shared_state import SharedState
-from smoothing import ExponentialSmoother2D
-from tracking_worker import TrackingWorker
+from .camera_worker import CameraWorker
+from .debug_view import create_debug_view
+from .indexing import face_box_to_sequence_indices
+from .sequence_cache import ImageSequenceCache
+from .shared_state import SharedState
+from .smoothing import ExponentialSmoother2D
+from .tracking_worker import TrackingWorker
 
 
 class WallpaperRenderer:
@@ -191,6 +191,12 @@ class WallpaperRenderer:
                         z_views=self.config.sequence.z_views,
                         flip_x=self.config.tracking.flip_x,
                         flip_z=self.config.tracking.flip_z,
+                        camera_horizontal_fov=self.config.tracking.camera_horizontal_fov,
+                        camera_vertical_fov=self.config.tracking.camera_vertical_fov,
+                        render_y_angle_min=self.config.tracking.render_y_angle_min,
+                        render_y_angle_max=self.config.tracking.render_y_angle_max,
+                        render_z_angle_min=self.config.tracking.render_z_angle_min,
+                        render_z_angle_max=self.config.tracking.render_z_angle_max,
                     )
 
                     smoothed_y, smoothed_z = self.smoother.update(
@@ -260,3 +266,5 @@ class WallpaperRenderer:
         self.sequence.shutdown()
 
         cv2.destroyAllWindows()
+    
+    
