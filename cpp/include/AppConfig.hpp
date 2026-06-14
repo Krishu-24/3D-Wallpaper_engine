@@ -8,6 +8,7 @@
 enum class TrackingBackend {
     MediaPipe,
     DebugMouse,
+    ExternalUdp,
 };
 
 struct SequenceConfig {
@@ -56,6 +57,14 @@ struct ThreadingConfig {
     double maxTrackingFps = 60.0;
 };
 
+struct ExternalTrackingConfig {
+    int udpPort = 5055;
+    int frameWidth = 640;
+    int frameHeight = 480;
+    double packetTimeoutSeconds = 0.50;
+    double minConfidence = 0.0;
+};
+
 struct WindowConfig {
     std::string windowName = "3D Wallpaper Engine - MediaPipe";
     std::string debugWindowName = "MediaPipe Landmark Debug";
@@ -68,6 +77,7 @@ struct AppConfig {
     CacheConfig cache;
     TrackingConfig tracking;
     ThreadingConfig threading;
+    ExternalTrackingConfig externalTracking;
     WindowConfig window;
     std::filesystem::path mediaPipeModelPath;
     std::filesystem::path projectRoot;

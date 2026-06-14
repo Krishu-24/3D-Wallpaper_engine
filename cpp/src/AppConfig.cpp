@@ -105,6 +105,36 @@ bool envFlagEnabled(const std::unordered_map<std::string, std::string>& env, con
     return value == "1" || value == "true" || value == "yes" || value == "on";
 }
 
+int envInt(
+    const std::unordered_map<std::string, std::string>& env,
+    const std::string& key,
+    int defaultValue) {
+    const std::string value = trim(envValue(env, key));
+    if (value.empty()) {
+        return defaultValue;
+    }
+    try {
+        return std::stoi(value);
+    } catch (const std::exception&) {
+        throw std::runtime_error(key + " must be an integer.");
+    }
+}
+
+double envDouble(
+    const std::unordered_map<std::string, std::string>& env,
+    const std::string& key,
+    double defaultValue) {
+    const std::string value = trim(envValue(env, key));
+    if (value.empty()) {
+        return defaultValue;
+    }
+    try {
+        return std::stod(value);
+    } catch (const std::exception&) {
+        throw std::runtime_error(key + " must be a number.");
+    }
+}
+
 } // namespace
 
 double TrackingConfig::cameraHorizontalFov() const {
@@ -137,12 +167,42 @@ AppConfig AppConfig::load() {
     const std::string trackingBackend = lower(trim(envValue(env, "TRACKING_BACKEND")));
     if (trackingBackend == "debug_mouse" || envFlagEnabled(env, "DEBUG_TRACKING")) {
         config.tracking.backend = TrackingBackend::DebugMouse;
+    } else if (trackingBackend == "external_udp") {
+        config.tracking.backend = TrackingBackend::ExternalUdp;
     } else if (trackingBackend.empty() || trackingBackend == "mediapipe") {
         config.tracking.backend = TrackingBackend::MediaPipe;
     } else {
         throw std::runtime_error(
             "Unsupported TRACKING_BACKEND value '" + trackingBackend +
-            "'. Use 'mediapipe' or 'debug_mouse'.");
+            "'. Use 'mediapipe', 'debug_mouse', or 'external_udp'.");
+    }
+
+    config.externalTracking.udpPort = envInt(
+        env,
+        "EXTERNAL_TRACKING_UDP_PORT",
+        config.externalTracking.udpPort);
+    config.externalTracking.frameWidth = envInt(
+        env,
+        "EXTERNAL_TRACKING_FRAME_WIDTH",
+        config.externalTracking.frameWidth);
+    config.externalTracking.frameHeight = envInt(
+        env,
+        "EXTERNAL_TRACKING_FRAME_HEIGHT",
+        config.externalTracking.frameHeight);
+    config.externalTracking.packetTimeoutSeconds = envDouble(
+        env,
+        "EXTERNAL_TRACKING_PACKET_TIMEOUT_SECONDS",
+        config.externalTracking.packetTimeoutSeconds);
+    config.externalTracking.minConfidence = envDouble(
+        env,
+        "EXTERNAL_TRACKING_MIN_CONFIDENCE",
+        config.externalTracking.minConfidence);
+
+    if (config.externalTracking.udpPort <= 0 || config.externalTracking.udpPort > 65535) {
+        throw std::runtime_error("EXTERNAL_TRACKING_UDP_PORT must be between 1 and 65535.");
+    }
+    if (config.externalTracking.frameWidth <= 0 || config.externalTracking.frameHeight <= 0) {
+        throw std::runtime_error("EXTERNAL_TRACKING_FRAME_WIDTH and EXTERNAL_TRACKING_FRAME_HEIGHT must be positive.");
     }
 
     auto modelPath = envValue(env, "MEDIAPIPE_MODEL_PATH");

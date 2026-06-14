@@ -28,6 +28,10 @@ target_include_directories(wallpaper_mediapipe
 
 target_link_libraries(wallpaper_mediapipe PRIVATE ${OpenCV_LIBS})
 
+if(WIN32)
+    target_link_libraries(wallpaper_mediapipe PRIVATE ws2_32)
+endif()
+
 if(HAVE_MEDIAPIPE_CPP)
     target_compile_definitions(wallpaper_mediapipe PRIVATE HAVE_MEDIAPIPE_CPP)
 endif()

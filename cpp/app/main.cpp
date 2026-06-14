@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -6,8 +7,22 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <sstream>
+#include <string>
 #include <thread>
 #include <utility>
+
+#ifdef _WIN32
+#define NOMINMAX
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
 
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
@@ -34,8 +49,24 @@ struct DebugTrackingSample {
     MediaPipeDebugData debugData;
 };
 
+struct ExternalTrackingPoint {
+    double x = 0.0;
+    double y = 0.0;
+    double confidence = 0.0;
+};
+
+#ifdef _WIN32
+using UdpSocketHandle = SOCKET;
+constexpr UdpSocketHandle kInvalidUdpSocket = INVALID_SOCKET;
+#else
+using UdpSocketHandle = int;
+constexpr UdpSocketHandle kInvalidUdpSocket = -1;
+#endif
+
 const char* trackingBackendName(TrackingBackend backend) {
     switch (backend) {
+    case TrackingBackend::ExternalUdp:
+        return "external_udp";
     case TrackingBackend::DebugMouse:
         return "debug_mouse";
     case TrackingBackend::MediaPipe:
@@ -59,6 +90,177 @@ void onDebugMouse(int event, int x, int y, int, void* userData) {
     state->hasMouse.store(true);
 }
 
+void closeUdpSocket(UdpSocketHandle socketHandle) {
+    if (socketHandle == kInvalidUdpSocket) {
+        return;
+    }
+#ifdef _WIN32
+    closesocket(socketHandle);
+#else
+    close(socketHandle);
+#endif
+}
+
+bool setNonBlocking(UdpSocketHandle socketHandle) {
+#ifdef _WIN32
+    u_long mode = 1;
+    return ioctlsocket(socketHandle, FIONBIO, &mode) == 0;
+#else
+    const int flags = fcntl(socketHandle, F_GETFL, 0);
+    return flags >= 0 && fcntl(socketHandle, F_SETFL, flags | O_NONBLOCK) == 0;
+#endif
+}
+
+std::optional<ExternalTrackingPoint> parseExternalTrackingMessage(
+    std::string message,
+    double minConfidence) {
+    std::replace(message.begin(), message.end(), ',', ' ');
+
+    ExternalTrackingPoint point;
+    std::istringstream stream(message);
+    if (!(stream >> point.x >> point.y >> point.confidence)) {
+        return std::nullopt;
+    }
+    if (point.confidence < minConfidence) {
+        return std::nullopt;
+    }
+    return point;
+}
+
+class ExternalUdpTracker {
+public:
+    explicit ExternalUdpTracker(const ExternalTrackingConfig& config)
+        : config_(config) {
+#ifdef _WIN32
+        WSADATA wsaData{};
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+            throw std::runtime_error("WSAStartup failed for external_udp tracker.");
+        }
+        wsaStarted_ = true;
+#endif
+
+        socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (socket_ == kInvalidUdpSocket) {
+            throw std::runtime_error("Could not create UDP socket for external_udp tracker.");
+        }
+
+        sockaddr_in address{};
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        address.sin_port = htons(static_cast<unsigned short>(config_.udpPort));
+
+        if (bind(socket_, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0) {
+            throw std::runtime_error("Could not bind external_udp tracker to localhost UDP port " +
+                                     std::to_string(config_.udpPort) + ".");
+        }
+
+        if (!setNonBlocking(socket_)) {
+            throw std::runtime_error("Could not set external_udp socket to nonblocking mode.");
+        }
+    }
+
+    ~ExternalUdpTracker() {
+        closeUdpSocket(socket_);
+        socket_ = kInvalidUdpSocket;
+#ifdef _WIN32
+        if (wsaStarted_) {
+            WSACleanup();
+        }
+#endif
+    }
+
+    ExternalUdpTracker(const ExternalUdpTracker&) = delete;
+    ExternalUdpTracker& operator=(const ExternalUdpTracker&) = delete;
+
+    std::optional<ExternalTrackingPoint> receiveLatest() const {
+        std::optional<ExternalTrackingPoint> latest;
+        char buffer[256]{};
+
+        while (true) {
+            sockaddr_in sender{};
+#ifdef _WIN32
+            int senderSize = sizeof(sender);
+            const int received = recvfrom(
+                socket_,
+                buffer,
+                static_cast<int>(sizeof(buffer) - 1),
+                0,
+                reinterpret_cast<sockaddr*>(&sender),
+                &senderSize);
+            if (received == SOCKET_ERROR) {
+                const int error = WSAGetLastError();
+                if (error == WSAEWOULDBLOCK) {
+                    break;
+                }
+                break;
+            }
+#else
+            socklen_t senderSize = sizeof(sender);
+            const int received = static_cast<int>(recvfrom(
+                socket_,
+                buffer,
+                sizeof(buffer) - 1,
+                0,
+                reinterpret_cast<sockaddr*>(&sender),
+                &senderSize));
+            if (received < 0) {
+                break;
+            }
+#endif
+            buffer[received] = '\0';
+            if (auto parsed = parseExternalTrackingMessage(buffer, config_.minConfidence)) {
+                latest = parsed;
+            }
+        }
+
+        return latest;
+    }
+
+private:
+    ExternalTrackingConfig config_;
+    UdpSocketHandle socket_ = kInvalidUdpSocket;
+#ifdef _WIN32
+    bool wsaStarted_ = false;
+#endif
+};
+
+DebugTrackingSample makePointTrackingSample(
+    const cv::Mat& frame,
+    const TrackingConfig& tracking,
+    double pointX,
+    double pointY,
+    const std::string& trackingPointLabel) {
+    const int frameWidth = frame.cols;
+    const int frameHeight = frame.rows;
+    const int centerX = std::max(0, std::min(frameWidth - 1, static_cast<int>(std::round(pointX))));
+    const int centerY = std::max(0, std::min(frameHeight - 1, static_cast<int>(std::round(pointY))));
+
+    const int boxWidth = std::max(1, tracking.minFaceSize.first);
+    const int boxHeight = std::max(1, tracking.minFaceSize.second);
+    cv::Rect faceBox(centerX - boxWidth / 2, centerY - boxHeight / 2, boxWidth, boxHeight);
+    faceBox &= cv::Rect(0, 0, frameWidth, frameHeight);
+
+    MediaPipeDebugData debugData;
+    debugData.nose = {centerX, centerY};
+    debugData.eyeMid = {centerX, centerY};
+    debugData.faceCenter = {centerX, centerY};
+    debugData.forehead = {centerX, std::max(0, centerY - boxHeight / 2)};
+    debugData.chin = {centerX, std::min(frameHeight - 1, centerY + boxHeight / 2)};
+    debugData.leftEyeInner = {std::max(0, centerX - boxWidth / 6), std::max(0, centerY - boxHeight / 8)};
+    debugData.rightEyeInner = {std::min(frameWidth - 1, centerX + boxWidth / 6), std::max(0, centerY - boxHeight / 8)};
+    debugData.leftEyeOuter = {std::max(0, centerX - boxWidth / 3), std::max(0, centerY - boxHeight / 8)};
+    debugData.rightEyeOuter = {std::min(frameWidth - 1, centerX + boxWidth / 3), std::max(0, centerY - boxHeight / 8)};
+    debugData.trackingPixel = {centerX, centerY};
+    debugData.trackingPoint = trackingPointLabel;
+    debugData.frameWidth = frameWidth;
+    debugData.frameHeight = frameHeight;
+    debugData.noseNorm = {static_cast<double>(centerX) / frameWidth, static_cast<double>(centerY) / frameHeight};
+    debugData.eyeMidNorm = debugData.noseNorm;
+    debugData.faceCenterNorm = debugData.noseNorm;
+
+    return {faceBox, debugData};
+}
+
 DebugTrackingSample makeDebugTrackingSample(
     const cv::Mat& frame,
     const TrackingConfig& tracking,
@@ -78,30 +280,12 @@ DebugTrackingSample makeDebugTrackingSample(
         centerY = static_cast<int>((frameHeight / 2.0) + std::cos(t * 0.7) * frameHeight * 0.25);
     }
 
-    const int boxWidth = std::max(1, tracking.minFaceSize.first);
-    const int boxHeight = std::max(1, tracking.minFaceSize.second);
-    cv::Rect faceBox(centerX - boxWidth / 2, centerY - boxHeight / 2, boxWidth, boxHeight);
-    faceBox &= cv::Rect(0, 0, frameWidth, frameHeight);
-
-    MediaPipeDebugData debugData;
-    debugData.nose = {centerX, centerY};
-    debugData.eyeMid = {centerX, centerY};
-    debugData.faceCenter = {centerX, centerY};
-    debugData.forehead = {centerX, std::max(0, centerY - boxHeight / 2)};
-    debugData.chin = {centerX, std::min(frameHeight - 1, centerY + boxHeight / 2)};
-    debugData.leftEyeInner = {std::max(0, centerX - boxWidth / 6), std::max(0, centerY - boxHeight / 8)};
-    debugData.rightEyeInner = {std::min(frameWidth - 1, centerX + boxWidth / 6), std::max(0, centerY - boxHeight / 8)};
-    debugData.leftEyeOuter = {std::max(0, centerX - boxWidth / 3), std::max(0, centerY - boxHeight / 8)};
-    debugData.rightEyeOuter = {std::min(frameWidth - 1, centerX + boxWidth / 3), std::max(0, centerY - boxHeight / 8)};
-    debugData.trackingPixel = {centerX, centerY};
-    debugData.trackingPoint = state.hasMouse.load() ? "debug_mouse" : "debug_synthetic";
-    debugData.frameWidth = frameWidth;
-    debugData.frameHeight = frameHeight;
-    debugData.noseNorm = {static_cast<double>(centerX) / frameWidth, static_cast<double>(centerY) / frameHeight};
-    debugData.eyeMidNorm = debugData.noseNorm;
-    debugData.faceCenterNorm = debugData.noseNorm;
-
-    return {faceBox, debugData};
+    return makePointTrackingSample(
+        frame,
+        tracking,
+        centerX,
+        centerY,
+        state.hasMouse.load() ? "debug_mouse" : "debug_synthetic");
 }
 
 bool isReasonableFaceBox(
@@ -142,9 +326,15 @@ void printStartupConfig(const AppConfig& config) {
     if (config.tracking.backend == TrackingBackend::MediaPipe) {
         std::cout << "[INFO] MediaPipe tracker selected as the intended final tracking path.\n";
         std::cout << "[INFO] MediaPipe debug view uses landmarks.\n";
-    } else {
+    } else if (config.tracking.backend == TrackingBackend::DebugMouse) {
         std::cout << "[INFO] Debug tracker selected: mouse in debug window, synthetic point until mouse input arrives.\n";
         std::cout << "[INFO] MediaPipeFaceTracker stub remains unused in this temporary mode.\n";
+    } else if (config.tracking.backend == TrackingBackend::ExternalUdp) {
+        std::cout << "[INFO] External UDP tracker selected: Python MediaPipe sends x,y,confidence to C++.\n";
+        std::cout << "[INFO] MediaPipeFaceTracker stub remains unused in this temporary mode.\n";
+        std::cout << "[INFO] Listening on localhost UDP port " << config.externalTracking.udpPort
+                  << " with tracking frame " << config.externalTracking.frameWidth
+                  << "x" << config.externalTracking.frameHeight << ".\n";
     }
     std::cout << "[INFO] Sequence: " << config.sequence.yViews << " x " << config.sequence.zViews << '\n';
     std::cout << "[INFO] Camera FOV from config: H=" << config.tracking.cameraHorizontalFov()
@@ -167,9 +357,11 @@ int main() {
         printStartupConfig(config);
 
         const bool useDebugTracker = config.tracking.backend == TrackingBackend::DebugMouse;
+        const bool useExternalUdpTracker = config.tracking.backend == TrackingBackend::ExternalUdp;
+        const bool useMediaPipeTracker = config.tracking.backend == TrackingBackend::MediaPipe;
 
         cv::VideoCapture camera;
-        if (!useDebugTracker) {
+        if (useMediaPipeTracker) {
             camera.open(config.tracking.cameraIndex);
             if (!camera.isOpened()) {
                 throw std::runtime_error("Could not open webcam.");
@@ -177,7 +369,7 @@ int main() {
         }
 
         std::unique_ptr<MediaPipeFaceTracker> tracker;
-        if (!useDebugTracker) {
+        if (useMediaPipeTracker) {
             tracker = std::make_unique<MediaPipeFaceTracker>(
                 config.mediaPipeModelPath.string(),
                 cv::Size(config.tracking.minFaceSize.first, config.tracking.minFaceSize.second),
@@ -185,6 +377,11 @@ int main() {
                 0.5,
                 0.5,
                 "eye_mid");
+        }
+
+        std::unique_ptr<ExternalUdpTracker> externalUdpTracker;
+        if (useExternalUdpTracker) {
+            externalUdpTracker = std::make_unique<ExternalUdpTracker>(config.externalTracking);
         }
 
         ExponentialSmoother2D smoother(
@@ -216,6 +413,8 @@ int main() {
         std::optional<double> rawZ;
         std::optional<cv::Rect> lastValidFaceBox;
         DebugTrackingState debugTrackingState;
+        std::optional<ExternalTrackingPoint> lastExternalPoint;
+        std::chrono::steady_clock::time_point lastExternalPacketTime{};
 
         window.setup();
         if (useDebugTracker && config.window.showDebugWindow) {
@@ -225,6 +424,9 @@ int main() {
         std::cout << "[INFO] Wallpaper renderer started.\n";
         if (useDebugTracker) {
             std::cout << "[INFO] Debug tracker active. Move the mouse inside the debug window to drive the viewpoint.\n";
+        } else if (useExternalUdpTracker) {
+            std::cout << "[INFO] external_udp active. Waiting for UDP packets shaped as x,y,confidence.\n";
+            std::cout << "[INFO] Holding last valid external point when packets pause; using center until first packet arrives.\n";
         } else {
             std::cout << "[INFO] Camera capture active.\n";
             std::cout << "[INFO] MediaPipe tracking active.\n";
@@ -237,6 +439,12 @@ int main() {
             cv::Mat cameraFrame;
             if (useDebugTracker) {
                 cameraFrame = cv::Mat(540, 960, CV_8UC3, cv::Scalar(18, 18, 18));
+            } else if (useExternalUdpTracker) {
+                cameraFrame = cv::Mat(
+                    config.externalTracking.frameHeight,
+                    config.externalTracking.frameWidth,
+                    CV_8UC3,
+                    cv::Scalar(18, 18, 18));
             } else {
                 const bool ok = camera.read(cameraFrame);
                 if (!ok || cameraFrame.empty()) {
@@ -249,7 +457,7 @@ int main() {
             }
 
             ++frameId;
-            if (!useDebugTracker && config.tracking.mirrorCamera) {
+            if (useMediaPipeTracker && config.tracking.mirrorCamera) {
                 cv::flip(cameraFrame, cameraFrame, 1);
             }
 
@@ -261,6 +469,35 @@ int main() {
                     config.tracking,
                     debugTrackingState,
                     frameId);
+                faceBox = sample.faceBox;
+                debugData = sample.debugData;
+            } else if (useExternalUdpTracker) {
+                if (const auto received = externalUdpTracker->receiveLatest()) {
+                    lastExternalPoint = received;
+                    lastExternalPacketTime = std::chrono::steady_clock::now();
+                }
+
+                ExternalTrackingPoint point;
+                std::string trackingPointLabel = "external_udp_center";
+                if (lastExternalPoint.has_value()) {
+                    point = *lastExternalPoint;
+                    const auto age = std::chrono::duration<double>(
+                        std::chrono::steady_clock::now() - lastExternalPacketTime);
+                    trackingPointLabel = age.count() <= config.externalTracking.packetTimeoutSeconds
+                                             ? "external_udp"
+                                             : "external_udp_hold";
+                } else {
+                    point.x = cameraFrame.cols / 2.0;
+                    point.y = cameraFrame.rows / 2.0;
+                    point.confidence = 0.0;
+                }
+
+                const auto sample = makePointTrackingSample(
+                    cameraFrame,
+                    config.tracking,
+                    point.x,
+                    point.y,
+                    trackingPointLabel);
                 faceBox = sample.faceBox;
                 debugData = sample.debugData;
             } else {
