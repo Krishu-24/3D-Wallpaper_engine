@@ -10,28 +10,30 @@ option(HAVE_MEDIAPIPE_CPP "Build with a configured MediaPipe C++ FaceLandmarker 
 
 find_package(OpenCV REQUIRED COMPONENTS core imgproc highgui videoio imgcodecs)
 
-add_executable(wallpaper_mediapipe
-    app/main.cpp
-    src/AppConfig.cpp
-    src/ExponentialSmoother2D.cpp
-    src/ImageSequence.cpp
-    src/IndexMapper.cpp
-    src/MediaPipeFaceTracker.cpp
-    src/SequenceCache.cpp
-    src/WallpaperWindow.cpp
+add_executable(debug_mouse_runner
+    runners/debug_mouse_runner.cpp
+    engine/src/AppConfig.cpp
+    engine/src/ExponentialSmoother2D.cpp
+    engine/src/ImageSequence.cpp
+    engine/src/IndexMapper.cpp
+    engine/src/MediaPipeFaceTracker.cpp
+    engine/src/SequenceCache.cpp
+    engine/src/WallpaperWindow.cpp
 )
 
-target_include_directories(wallpaper_mediapipe
+add_custom_target(wallpaper_mediapipe DEPENDS debug_mouse_runner)
+
+target_include_directories(debug_mouse_runner
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/engine/include
 )
 
-target_link_libraries(wallpaper_mediapipe PRIVATE ${OpenCV_LIBS})
+target_link_libraries(debug_mouse_runner PRIVATE ${OpenCV_LIBS})
 
 if(WIN32)
-    target_link_libraries(wallpaper_mediapipe PRIVATE ws2_32)
+    target_link_libraries(debug_mouse_runner PRIVATE ws2_32)
 endif()
 
 if(HAVE_MEDIAPIPE_CPP)
-    target_compile_definitions(wallpaper_mediapipe PRIVATE HAVE_MEDIAPIPE_CPP)
+    target_compile_definitions(debug_mouse_runner PRIVATE HAVE_MEDIAPIPE_CPP)
 endif()

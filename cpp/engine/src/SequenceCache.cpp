@@ -1,4 +1,4 @@
-#include "SequenceCache.hpp"
+#include "wallpaper_engine/SequenceCache.hpp"
 
 #include <algorithm>
 #include <cmath>

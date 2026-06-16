@@ -5,9 +5,9 @@
 
 #include <opencv2/core.hpp>
 
-#include "AppConfig.hpp"
-#include "MediaPipeFaceTracker.hpp"
-#include "SequenceCache.hpp"
+#include "wallpaper_engine/AppConfig.hpp"
+#include "wallpaper_engine/MediaPipeFaceTracker.hpp"
+#include "wallpaper_engine/SequenceCache.hpp"
 
 class WallpaperWindow {
 public:

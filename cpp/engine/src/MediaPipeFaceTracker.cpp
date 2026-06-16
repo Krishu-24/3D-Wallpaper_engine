@@ -1,4 +1,4 @@
-#include "MediaPipeFaceTracker.hpp"
+#include "wallpaper_engine/MediaPipeFaceTracker.hpp"
 
 #include <algorithm>
 #include <filesystem>

@@ -1,4 +1,4 @@
-#include "ImageSequence.hpp"
+#include "wallpaper_engine/ImageSequence.hpp"
 
 #include <algorithm>
 #include <iomanip>

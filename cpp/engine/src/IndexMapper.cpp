@@ -1,4 +1,4 @@
-#include "IndexMapper.hpp"
+#include "wallpaper_engine/IndexMapper.hpp"
 
 #include <algorithm>
 #include <cmath>

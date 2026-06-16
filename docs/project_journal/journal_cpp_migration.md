@@ -28,8 +28,8 @@ The first C++ version was created under the project’s `cpp/` folder. The struc
 ```text
 cpp/
 ├── CMakeLists.txt
-├── app/main.cpp
-├── include/
+├── runners/debug_mouse_runner.cpp
+├── engine/include/wallpaper_engine/
 │   ├── AppConfig.hpp
 │   ├── IndexMapper.hpp
 │   ├── ExponentialSmoother2D.hpp
@@ -37,7 +37,7 @@ cpp/
 │   ├── SequenceCache.hpp
 │   ├── MediaPipeFaceTracker.hpp
 │   └── WallpaperWindow.hpp
-└── src/
+└── engine/src/
     ├── AppConfig.cpp
     ├── IndexMapper.cpp
     ├── ExponentialSmoother2D.cpp
@@ -92,7 +92,7 @@ After the debug mouse backend worked, the next step was an isolated MediaPipe C+
 Experiment path in the project repo:
 
 ```text
-cpp/experiments/mediapipe_face_landmarker_live/
+cpp/mediapipe_bazel/face_landmarker_live_test/
 ```
 
 The experiment used:

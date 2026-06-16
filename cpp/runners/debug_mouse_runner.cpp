@@ -28,13 +28,13 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
 
-#include "AppConfig.hpp"
-#include "ExponentialSmoother2D.hpp"
-#include "ImageSequence.hpp"
-#include "IndexMapper.hpp"
-#include "MediaPipeFaceTracker.hpp"
-#include "SequenceCache.hpp"
-#include "WallpaperWindow.hpp"
+#include "wallpaper_engine/AppConfig.hpp"
+#include "wallpaper_engine/ExponentialSmoother2D.hpp"
+#include "wallpaper_engine/ImageSequence.hpp"
+#include "wallpaper_engine/IndexMapper.hpp"
+#include "wallpaper_engine/MediaPipeFaceTracker.hpp"
+#include "wallpaper_engine/SequenceCache.hpp"
+#include "wallpaper_engine/WallpaperWindow.hpp"
 
 namespace {
 

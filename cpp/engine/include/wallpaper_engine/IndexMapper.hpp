@@ -4,7 +4,7 @@
 
 #include <opencv2/core.hpp>
 
-#include "AppConfig.hpp"
+#include "wallpaper_engine/AppConfig.hpp"
 
 class IndexMapper {
 public:

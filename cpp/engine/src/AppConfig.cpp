@@ -1,4 +1,4 @@
-#include "AppConfig.hpp"
+#include "wallpaper_engine/AppConfig.hpp"
 
 #include <algorithm>
 #include <cctype>

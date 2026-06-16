@@ -12,7 +12,7 @@
 
 #include <opencv2/core.hpp>
 
-#include "ImageSequence.hpp"
+#include "wallpaper_engine/ImageSequence.hpp"
 
 struct CacheInfo {
     int cachedFrames = 0;

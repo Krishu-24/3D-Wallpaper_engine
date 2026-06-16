@@ -1,4 +1,4 @@
-#include "ExponentialSmoother2D.hpp"
+#include "wallpaper_engine/ExponentialSmoother2D.hpp"
 
 #include <cmath>
 

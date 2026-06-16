@@ -1,4 +1,4 @@
-#include "WallpaperWindow.hpp"
+#include "wallpaper_engine/WallpaperWindow.hpp"
 
 #include <algorithm>
 #include <cmath>
