@@ -33,6 +33,14 @@ if (-not (Test-Path (Join-Path $SourceAppDir "main.cpp"))) {
     throw "Canonical MediaPipe Bazel app is missing main.cpp at $SourceAppDir."
 }
 
+$SourceEngineDir = Join-Path $RepoRoot "cpp\engine"
+if (-not (Test-Path (Join-Path $SourceEngineDir "include\wallpaper_engine"))) {
+    throw "Engine include folder not found at $SourceEngineDir."
+}
+if (-not (Test-Path (Join-Path $SourceEngineDir "src"))) {
+    throw "Engine source folder not found at $SourceEngineDir."
+}
+
 $env:BAZEL_SH = $GitBash
 
 $Py = (& py -3.12 -c "import sys; print(sys.executable)").Trim()
@@ -61,7 +69,13 @@ if (Test-Path $DestinationAppDir) {
     Remove-Item -LiteralPath $DestinationAppDir -Recurse -Force
 }
 Copy-Item -LiteralPath $SourceAppDir -Destination $DestinationAppDir -Recurse -Force
+$DestinationEngineDir = Join-Path $DestinationAppDir "engine"
+if (Test-Path $DestinationEngineDir) {
+    Remove-Item -LiteralPath $DestinationEngineDir -Recurse -Force
+}
+Copy-Item -LiteralPath $SourceEngineDir -Destination $DestinationEngineDir -Recurse -Force
 Write-Host "Copied app to $DestinationAppDir"
+Write-Host "Copied engine to $DestinationEngineDir"
 
 $Label = "//mediapipe/experiments/wallpaper_mediapipe_runner:wallpaper_mediapipe_runner"
 
@@ -102,6 +116,12 @@ foreach ($path in $OpenCvPaths) {
             }
     }
 }
+
+$env:TRACKING_BACKEND = "mediapipe"
+$env:DEBUG_TRACKING = "false"
+$env:MEDIAPIPE_MODEL_PATH = $ModelPath
+
+Set-Location $RepoRoot
 
 Write-Host "Running $ExePath"
 & $ExePath $ModelPath

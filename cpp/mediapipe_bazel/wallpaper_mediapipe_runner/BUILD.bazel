@@ -1,6 +1,16 @@
 cc_binary(
     name = "wallpaper_mediapipe_runner",
-    srcs = ["main.cpp"],
+    srcs = [
+        "main.cpp",
+        "engine/src/AppConfig.cpp",
+        "engine/src/ExponentialSmoother2D.cpp",
+        "engine/src/ImageSequence.cpp",
+        "engine/src/IndexMapper.cpp",
+        "engine/src/SequenceCache.cpp",
+        "engine/src/WallpaperWindow.cpp",
+    ],
+    copts = ["/std:c++17"],
+    includes = ["engine/include"],
     deps = [
         "//mediapipe/tasks/cc/vision/face_landmarker:face_landmarker",
         "//mediapipe/tasks/cc/vision/utils:image_utils",

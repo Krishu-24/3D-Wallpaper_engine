@@ -15,5 +15,12 @@ The Bazel target is:
 //mediapipe/experiments/wallpaper_mediapipe_runner:wallpaper_mediapipe_runner
 ```
 
-The app currently runs the working live FaceLandmarker webcam flow and uses the
-same landmark logic as the earlier live test.
+The app runs the working live FaceLandmarker webcam flow, extracts `eye_mid`,
+then feeds that point through the existing C++ engine classes:
+
+```text
+webcam -> FaceLandmarker -> eye_mid -> IndexMapper -> ExponentialSmoother2D -> SequenceCache -> WallpaperWindow
+```
+
+The wrapper script also copies `cpp/engine/` beside this app before building so
+Bazel compiles the reusable engine sources directly.
