@@ -3,4 +3,45 @@ assets/cube/**/test_cube_imageseq*/
 assets/cube/**/*.png
 assets/screen_as_window/renders
 .env
+
+
+# Python cache
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# C++ / CMake build outputs
 cpp/build/
+build/
+.vs/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Visual Studio / MSVC generated files
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+
+# Bazel outputs / external build folders
+bazel-*/
+bazel-bin/
+bazel-out/
+bazel-testlogs/
+
+# external dependency source/caches
+mediapipe/
+mediapipe_latest_failed/
+opencv/
+vcpkg_installed/
+
+# Large temporary/log files
+*.log
